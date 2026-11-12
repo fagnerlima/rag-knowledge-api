@@ -10,3 +10,4 @@ All notable changes to this project are documented in this file. The format foll
 - Validation and model failures return RFC 9457 Problem Details (`400` and `502`).
 - Health endpoint at `/actuator/health`.
 - The server listens only on `127.0.0.1` by default (`SERVER_ADDRESS` overrides it).
+- The application refuses to start when `OPENAI_API_KEY` is not set, instead of answering every question with `502`.

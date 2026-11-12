@@ -13,7 +13,7 @@ Status: work in progress. The question endpoint works without retrieval yet; ing
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
-| `OPENAI_API_KEY` | Yes, to run the app | — | OpenAI credential. Never commit it |
+| `OPENAI_API_KEY` | Yes, to run the app | — | OpenAI credential; the app refuses to start without it. Never commit it |
 | `OPENAI_CHAT_MODEL` | No | `gpt-5-mini` | Chat model |
 | `OPENAI_MAX_COMPLETION_TOKENS` | No | `3000` | Output token cap per request, including the model's hidden reasoning tokens |
 | `OPENAI_REASONING_EFFORT` | No | `low` | Reasoning effort; must be supported by the chosen model (reasoning models such as the gpt-5 family) |
