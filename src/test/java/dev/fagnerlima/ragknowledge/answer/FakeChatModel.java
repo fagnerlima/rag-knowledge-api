@@ -34,6 +34,7 @@ class FakeChatModel implements ChatModel {
     @Override
     public ChatResponse call(Prompt prompt) {
         lastPrompt = prompt;
+
         return new ChatResponse(List.of(new Generation(new AssistantMessage(reply.get()))));
     }
 

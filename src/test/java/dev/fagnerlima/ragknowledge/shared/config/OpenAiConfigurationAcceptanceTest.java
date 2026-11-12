@@ -41,6 +41,7 @@ class OpenAiConfigurationAcceptanceTest {
     void ac1_applicationPropertiesUsesNoDeprecatedSpringAiProperty() throws IOException {
         Set<String> deprecated = deprecatedPropertiesFromClasspathMetadata();
         Properties applicationProperties = new Properties();
+
         try (InputStream in = new ClassPathResource("application.properties").getInputStream()) {
             applicationProperties.load(in);
         }
@@ -138,15 +139,18 @@ class OpenAiConfigurationAcceptanceTest {
 
     private static Throwable rootCause(Throwable failure) {
         Throwable cause = failure;
+
         while (cause.getCause() != null) {
             cause = cause.getCause();
         }
+
         return cause;
     }
 
     private static Set<String> deprecatedPropertiesFromClasspathMetadata() throws IOException {
         JsonMapper mapper = JsonMapper.builder().build();
         Set<String> deprecated = new HashSet<>();
+
         for (URL url : Collections.list(OpenAiConfigurationAcceptanceTest.class.getClassLoader()
                 .getResources("META-INF/spring-configuration-metadata.json"))) {
             try (InputStream in = url.openStream()) {
@@ -157,6 +161,7 @@ class OpenAiConfigurationAcceptanceTest {
                 }
             }
         }
+
         return deprecated;
     }
 }
