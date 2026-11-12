@@ -1,5 +1,7 @@
 # rag-knowledge-api
 
+[![CI](https://github.com/fagnerlima/rag-knowledge-api/actions/workflows/ci.yml/badge.svg)](https://github.com/fagnerlima/rag-knowledge-api/actions/workflows/ci.yml)
+
 Knowledge API with Retrieval-Augmented Generation (RAG), built with Java 21, Spring Boot and Spring AI. Study project: it ingests small public technical documents, retrieves relevant passages and answers questions citing the source.
 
 Status: work in progress. The question endpoint works without retrieval yet; ingestion with pgvector comes next.

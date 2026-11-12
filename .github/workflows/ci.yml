@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: corretto
+          java-version: '21'
+          cache: maven
+
+      # Tests replace the model with a fake: no OpenAI key or network call is needed.
+      - name: Build and run tests
+        run: ./mvnw -B -ntp verify
+
+      # Surefire writes every JVM system property into the reports, and artifacts of a public repo
+      # are downloadable: never pass a secret as -D or via MAVEN_OPTS/argLine in this job.
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 7
