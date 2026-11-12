@@ -6,7 +6,7 @@ import org.springframework.ai.chat.client.AdvisorParams;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
-import dev.fagnerlima.ragknowledge.shared.util.NullChecks;
+import dev.fagnerlima.ragknowledge.shared.util.ObjectUtils;
 
 @Service
 public class AnswerService {
@@ -27,7 +27,7 @@ public class AnswerService {
     public AnswerResponse answer(AskQuestionRequest request) {
         LlmAnswer llmAnswer = callModel(request.question());
 
-        if (llmAnswer == null || NullChecks.anyNullOrBlank(llmAnswer.answer(), llmAnswer.confidence())) {
+        if (llmAnswer == null || ObjectUtils.anyNullOrBlank(llmAnswer.answer(), llmAnswer.confidence())) {
             throw new LlmResponseException("The language model returned an answer outside the contract");
         }
 

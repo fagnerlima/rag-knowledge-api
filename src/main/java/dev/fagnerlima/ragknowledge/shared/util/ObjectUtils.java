@@ -1,9 +1,9 @@
 package dev.fagnerlima.ragknowledge.shared.util;
 
 /** Null and blank checks that read as one condition at the call site. */
-public final class NullChecks {
+public final class ObjectUtils {
 
-    private NullChecks() {
+    private ObjectUtils() {
     }
 
     /** Returns {@code true} when any value is {@code null} or a blank {@link CharSequence}; the array itself must not be null. */
