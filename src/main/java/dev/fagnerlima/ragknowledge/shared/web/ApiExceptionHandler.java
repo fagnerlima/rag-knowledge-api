@@ -30,14 +30,17 @@ public class ApiExceptionHandler {
                 "The answer could not be generated. Try again later.");
         problem.setType(LLM_UNAVAILABLE_TYPE);
         problem.setTitle("Language model unavailable");
+
         return problem;
     }
 
     private static List<String> causeTypes(Throwable exception) {
         List<String> types = new ArrayList<>();
+
         for (Throwable cause = exception.getCause(); cause != null && types.size() < 5; cause = cause.getCause()) {
             types.add(cause.getClass().getName());
         }
+
         return types;
     }
 }
