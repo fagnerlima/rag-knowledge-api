@@ -24,6 +24,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.web.server.autoconfigure.ServerProperties;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -31,17 +32,20 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 import dev.fagnerlima.ragknowledge.shared.web.ApiExceptionHandler;
+import dev.fagnerlima.ragknowledge.support.PgvectorTestDatabase;
 
 /**
  * Acceptance tests of docs/api-contract.md through the full application context: real controller, validation,
  * exception handling, ChatClient auto-configuration and Spring AI structured output, with only the OpenAI
- * {@link ChatModel} replaced. The base URL points to a closed local port so a wiring mistake cannot reach OpenAI.
+ * {@link ChatModel} replaced and the embedding model and database provided by {@link PgvectorTestDatabase}. The base
+ * URL points to a closed local port so a wiring mistake cannot reach OpenAI.
  */
 @SpringBootTest(properties = {
         "spring.ai.openai.api-key=test-key-not-real",
         "spring.ai.openai.base-url=http://127.0.0.1:9"
 })
 @AutoConfigureMockMvc
+@Import(PgvectorTestDatabase.class)
 @ExtendWith(OutputCaptureExtension.class)
 class AnswerApiAcceptanceTest {
 
