@@ -4,7 +4,7 @@
 
 Knowledge API with Retrieval-Augmented Generation (RAG), built with Java 21, Spring Boot and Spring AI. Study project: it ingests small public technical documents, retrieves relevant passages and answers questions citing the source.
 
-Status: work in progress. The question endpoint works without retrieval yet. The PostgreSQL + pgvector store and its schema are in place; ingesting the document corpus comes next.
+Status: work in progress. A small corpus of original technical notes can be ingested into PostgreSQL + pgvector and searched from the command line. The question endpoint does not use retrieval yet; that is the next step.
 
 ## Requirements
 
@@ -54,6 +54,26 @@ curl -s -X POST localhost:8080/api/v1/answers -H 'Content-Type: application/json
 Each request calls the OpenAI API and is billed. The question text is sent to OpenAI, a third party, under OpenAI's API data policies: do not include personal or confidential data. Questions and answers are not stored.
 
 `/actuator/health` reports `DOWN` (HTTP 503) when the database is unreachable.
+
+## Ingest and search the corpus
+
+The corpus is a handful of original technical notes in [`src/main/resources/corpus`](src/main/resources/corpus), listed in `manifest.json` (`id`, `title`, `file`). They contain no personal or corporate data.
+
+With the database running and `OPENAI_API_KEY` set, index the corpus (the application runs without the web server and exits when done):
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.arguments=--ingest
+```
+
+Each note is split into chunks of about 400 tokens and each chunk is embedded with OpenAI and stored with its metadata (document id, title, source file, chunk index, content hash). Running it again is safe: unchanged notes are skipped without calling OpenAI, a changed note has its chunks replaced in one transaction, and notes removed from the manifest are deleted (the corpus owns the `vector_store` table). Run one ingestion at a time. The whole corpus is about 3,400 tokens, a fraction of a cent per full ingestion.
+
+Search the indexed chunks by meaning (one embedding call per query):
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.arguments="--search='How does HNSW trade recall for speed?'"
+```
+
+It prints the 4 closest chunks with their cosine similarity score, title, chunk index and source file. `--ingest` and `--search=...` can be combined; they are command-line options rather than HTTP endpoints so that the unauthenticated API offers no write or bulk-billing operation. The query text is sent to OpenAI like a question.
 
 ## Test
 

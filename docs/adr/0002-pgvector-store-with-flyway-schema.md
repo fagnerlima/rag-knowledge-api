@@ -19,7 +19,25 @@ Retrieval needs a store for document chunks, their metadata (document id, title,
 - **`initialize-schema=true`:** the DDL would be unversioned and run on every startup; it also creates the `hstore` and `uuid-ossp` extensions the project does not need, which may require a superuser outside the local container; and a dimension change would need `remove-existing-vector-store-table`, which drops every stored embedding.
 - **Plain JDBC without Spring AI's store:** full control of the SQL, but it gives up `VectorStore`, its filter expressions and the retrieval advisors the RAG step builds on, for code the project would have to write and test itself.
 
-## Planned next (slice B, not implemented yet)
+## Slice B as implemented (2026-11-17)
+
+Implemented as planned below, with these adjustments:
+
+- **Corpus:** original notes written for this repository instead of excerpts of third-party documentation, so no license tracking or NOTICE file is needed. The manifest lists `id`, `title` and `file`; chunk metadata is `documentId`, `title`, `source` (the file name), `chunkIndex` and `contentHash`.
+- **Content hash:** SHA-256 of the chunking settings, title, source file and text, stored in every chunk's metadata rather than in a separate table, so there is no migration and the hash can never disagree with the stored chunks. A document whose chunks carry anything but exactly its current hash (for example a partial earlier state) is re-ingested.
+- **Chunking:** `TokenTextSplitter` at 400 tokens with the minimum chunk length lowered to 0, because the library keeps only pieces longer than 5 characters by default and a tiny document would otherwise never be stored. A document above 100 chunks is rejected, since the splitter would return the excess as one chunk beyond the embedding model's input limit.
+- **Commands:** `--ingest` and `--search=<query>` run as an `ApplicationRunner` with the web server disabled, and the process exits when they finish.
+
+Known limits, accepted for a single-user study project and to revisit if ingestion is ever shared or exposed:
+
+- **The corpus owns the table:** pruning deletes every document id missing from the manifest. Storing other content in `vector_store` needs a scope (for example a `corpus` metadata key) or a separate table first.
+- **One ingestion at a time:** two concurrent runs can embed the same documents twice and leave a document with chunks of two versions; the next run detects the mixed hashes and repairs it. A PostgreSQL advisory lock is the fix if concurrent runs become possible.
+- **Open transaction during the embedding call:** `PgVectorStore.add` embeds before inserting, so each document's transaction stays open (holding the deleted rows' locks, not blocking readers) during the OpenAI request and its retries.
+- **No metadata index:** reading the hashes and each delete by document id scan the table, negligible at the corpus size (10 chunks). A `gin (metadata jsonb_path_ops)` index (created `CONCURRENTLY`, in a migration outside a transaction) serves the jsonpath deletes when the table grows.
+
+The original plan, kept for reference:
+
+## Planned next (slice B)
 
 - A small bundled public corpus with a manifest (source URL and license per document) and a NOTICE file.
 - Chunking with `TokenTextSplitter` at about 400 tokens per chunk.
