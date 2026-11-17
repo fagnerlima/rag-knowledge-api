@@ -1,0 +1,9 @@
+{
+  "documents": [
+    { "id": "pgvector-hnsw", "title": "pgvector and HNSW indexes", "file": "pgvector-hnsw.md" },
+    { "id": "postgresql-mvcc", "title": "PostgreSQL MVCC", "file": "postgresql-mvcc.md" },
+    { "id": "kubernetes-pods", "title": "Kubernetes Pods", "file": "kubernetes-pods.md" },
+    { "id": "twelve-factor", "title": "The Twelve-Factor App in practice", "file": "twelve-factor.md" },
+    { "id": "spring-boot-configuration", "title": "Spring Boot externalized configuration", "file": "spring-boot-configuration.md" }
+  ]
+}
