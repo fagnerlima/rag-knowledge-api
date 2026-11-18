@@ -17,9 +17,15 @@ All notable changes to this project are documented in this file. The format foll
 - A bundled corpus of five original technical notes (pgvector and HNSW, PostgreSQL MVCC, Kubernetes Pods, Twelve-Factor, Spring Boot configuration).
 - `--ingest` indexes the corpus in chunks of about 400 tokens; re-running it skips unchanged notes, replaces changed ones and removes deleted ones.
 - `--search=<query>` prints the most similar chunks with their score and source.
+- `POST /api/v1/answers` now answers from the ingested corpus (RAG) and returns the passages it cited in `sources`, with document id, title and excerpt.
+- A question unrelated to the corpus is answered with `LOW` confidence and no sources, without calling the chat model.
+- `RAG_TOP_K` and `RAG_SIMILARITY_THRESHOLD` tune how many passages are retrieved and how similar they must be.
+- `503 Service Unavailable` (`knowledge-unavailable`) when the knowledge base cannot be searched.
 
 ### Changed
 
 - The application now needs PostgreSQL with pgvector to start; it connects with `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` (defaults match `compose.yaml`).
 - `/actuator/health` also checks the database and reports `DOWN` when it is unreachable.
 - Running the tests now requires Docker; they still need no OpenAI key.
+- Questions outside the corpus are no longer answered from the model's general knowledge: they get a fixed `LOW` answer (in English) with no sources.
+- An answer that cites no passage is returned with `LOW` confidence.
