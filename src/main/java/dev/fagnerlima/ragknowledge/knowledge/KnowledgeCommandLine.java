@@ -3,9 +3,6 @@ package dev.fagnerlima.ragknowledge.knowledge;
 import java.util.List;
 import java.util.Locale;
 
-import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -28,13 +25,13 @@ public class KnowledgeCommandLine implements ApplicationRunner {
 
     private final CorpusLoader corpusLoader;
     private final DocumentIngestionService ingestionService;
-    private final VectorStore vectorStore;
+    private final PassageRetriever retriever;
 
     public KnowledgeCommandLine(CorpusLoader corpusLoader, DocumentIngestionService ingestionService,
-            VectorStore vectorStore) {
+            PassageRetriever retriever) {
         this.corpusLoader = corpusLoader;
         this.ingestionService = ingestionService;
-        this.vectorStore = vectorStore;
+        this.retriever = retriever;
     }
 
     /** Whether the arguments ask for a knowledge command instead of serving the API. */
@@ -70,17 +67,13 @@ public class KnowledgeCommandLine implements ApplicationRunner {
     }
 
     private void search(String query) {
-        List<Document> results = vectorStore.similaritySearch(
-                SearchRequest.builder().query(query).topK(SEARCH_TOP_K).build());
+        List<RetrievedPassage> results = retriever.retrieveTop(query, SEARCH_TOP_K);
 
         System.out.printf("Top %d chunks for \"%s\":%n", results.size(), query);
 
-        for (Document result : results) {
-            var metadata = result.getMetadata();
-
-            System.out.printf(Locale.ROOT, "%.3f  %s (chunk %s, %s)%n       %s%n", result.getScore(),
-                    metadata.get(DocumentChunker.TITLE), metadata.get(DocumentChunker.CHUNK_INDEX),
-                    metadata.get(DocumentChunker.SOURCE), excerpt(result.getText()));
+        for (RetrievedPassage result : results) {
+            System.out.printf(Locale.ROOT, "%.3f  %s (chunk %d, %s)%n       %s%n", result.score(), result.title(),
+                    result.chunkIndex(), result.source(), result.excerpt(EXCERPT_LENGTH));
         }
     }
 
@@ -90,11 +83,5 @@ public class KnowledgeCommandLine implements ApplicationRunner {
         }
 
         return values.getFirst().strip();
-    }
-
-    private static String excerpt(String text) {
-        String singleLine = text.replaceAll("\\s+", " ").strip();
-
-        return singleLine.length() <= EXCERPT_LENGTH ? singleLine : singleLine.substring(0, EXCERPT_LENGTH) + "…";
     }
 }
