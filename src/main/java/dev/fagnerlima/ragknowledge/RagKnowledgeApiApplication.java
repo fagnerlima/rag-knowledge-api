@@ -3,11 +3,13 @@ package dev.fagnerlima.ragknowledge;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.context.ConfigurableApplicationContext;
 
 import dev.fagnerlima.ragknowledge.knowledge.KnowledgeCommandLine;
 
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class RagKnowledgeApiApplication {
 
 	public static void main(String[] args) {

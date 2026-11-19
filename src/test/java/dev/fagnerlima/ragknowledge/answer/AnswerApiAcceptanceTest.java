@@ -3,6 +3,8 @@ package dev.fagnerlima.ragknowledge.answer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.InetAddress;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Assumptions;
@@ -15,7 +17,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.model.tool.StructuredOutputChatOptions;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -28,6 +32,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
@@ -39,10 +44,14 @@ import dev.fagnerlima.ragknowledge.support.PgvectorTestDatabase;
  * exception handling, ChatClient auto-configuration and Spring AI structured output, with only the OpenAI
  * {@link ChatModel} replaced and the embedding model and database provided by {@link PgvectorTestDatabase}. The base
  * URL points to a closed local port so a wiring mistake cannot reach OpenAI.
+ *
+ * <p>Each test starts with one passage in the vector store. The fake embedding model scores word overlap, so the
+ * threshold is lowered: any question sharing a word with the passage retrieves it, and one sharing none does not.
  */
 @SpringBootTest(properties = {
         "spring.ai.openai.api-key=test-key-not-real",
-        "spring.ai.openai.base-url=http://127.0.0.1:9"
+        "spring.ai.openai.base-url=http://127.0.0.1:9",
+        "rag.retrieval.similarity-threshold=0.05"
 })
 @AutoConfigureMockMvc
 @Import(PgvectorTestDatabase.class)
@@ -52,6 +61,10 @@ class AnswerApiAcceptanceTest {
     private static final String ENDPOINT = "/api/v1/answers";
     private static final String DISTINCT_QUESTION = "quokka-marker question about sealed types";
     private static final String DISTINCT_MODEL_OUTPUT = "platypus-marker raw model output";
+    private static final String PASSAGE_TEXT =
+            "Sealed types restrict which classes may extend them. A record is a transparent data carrier: what it "
+                    + "holds is its state.";
+    private static final String OFF_TOPIC_QUESTION = "Quando florescem os ipês amarelos?";
 
     @Autowired
     private MockMvcTester mvc;
@@ -60,23 +73,61 @@ class AnswerApiAcceptanceTest {
     private SwitchableChatModel chatModel;
 
     @BeforeEach
-    void defaultReply() {
+    void onePassageAndADefaultReply(@Autowired JdbcTemplate jdbcTemplate, @Autowired VectorStore vectorStore) {
+        jdbcTemplate.update("DELETE FROM vector_store");
+        vectorStore.add(List.of(Document.builder()
+                .text(PASSAGE_TEXT)
+                .metadata(Map.of("documentId", "java-types", "title", "Java types", "source", "java-types.md",
+                        "chunkIndex", 0, "contentHash", "test"))
+                .build()));
         chatModel.use(FakeChatModel.replying("""
-                {"answer": "Sealed types restrict which classes may extend them.", "confidence": "HIGH"}
+                {"answer": "Sealed types restrict which classes may extend them.", "confidence": "HIGH",
+                 "citedPassages": [1]}
                 """));
     }
 
-    // AC1: valid question returns 200 with the answer contract.
+    // AC1 + RAG: a related question returns 200 with the answer and the cited passage as its source.
     @Test
-    void ac1_validQuestionReturnsTheAnswerContractThroughTheRealChatClient() {
+    void ac1_validQuestionReturnsTheAnswerContractWithTheCitedSourceThroughTheRealChatClient() {
         assertThat(postJson("{\"question\": \"" + DISTINCT_QUESTION + "\"}"))
                 .hasStatusOk()
                 .hasContentTypeCompatibleWith(MediaType.APPLICATION_JSON)
                 .bodyJson()
                 .isStrictlyEqualTo("""
                         {"answer": "Sealed types restrict which classes may extend them.",
-                         "confidence": "HIGH", "sources": []}
-                        """);
+                         "confidence": "HIGH",
+                         "sources": [{"documentId": "java-types", "title": "Java types", "excerpt": "%s"}]}
+                        """.formatted(PASSAGE_TEXT));
+    }
+
+    // RAG: the retrieved passage reaches the model as numbered context, next to the question.
+    @Test
+    void rag_retrievedPassageIsSentToTheModelWithTheQuestion() {
+        FakeChatModel model = FakeChatModel.replying("{\"answer\": \"ok\", \"confidence\": \"LOW\", \"citedPassages\": []}");
+        chatModel.use(model);
+
+        assertThat(postJson("{\"question\": \"" + DISTINCT_QUESTION + "\"}"))
+                .hasStatusOk()
+                .bodyJson()
+                .extractingPath("$.sources").asArray().isEmpty();
+
+        assertThat(model.lastPrompt().getUserMessage().getText())
+                .contains("<passage number=\"1\" title=\"Java types\">", PASSAGE_TEXT, DISTINCT_QUESTION);
+    }
+
+    // RAG: a question with no related passage gets a LOW answer without sources and never reaches the model.
+    @Test
+    void rag_questionWithoutRelatedPassageIsAnsweredWithoutCallingTheModel() {
+        FakeChatModel model = FakeChatModel.replying("{\"answer\": \"ok\", \"confidence\": \"HIGH\", \"citedPassages\": []}");
+        chatModel.use(model);
+
+        assertThat(postJson("{\"question\": \"" + OFF_TOPIC_QUESTION + "\"}"))
+                .hasStatusOk()
+                .bodyJson()
+                .isStrictlyEqualTo("""
+                        {"answer": "%s", "confidence": "LOW", "sources": []}
+                        """.formatted(AnswerService.NO_CONTEXT_ANSWER));
+        assertThat(model.lastPrompt()).isNull();
     }
 
     // AC1 + contract compatibility: unknown request fields do not break the request.
@@ -88,14 +139,15 @@ class AnswerApiAcceptanceTest {
     // AC2: the auto-configured ChatClient sends the LlmAnswer JSON Schema as native structured output.
     @Test
     void ac2_requestsNativeStructuredOutputThroughTheAutoConfiguredChatClient() {
-        FakeChatModel model = FakeChatModel.replying("{\"answer\": \"ok\", \"confidence\": \"LOW\"}");
+        FakeChatModel model = FakeChatModel.replying("{\"answer\": \"ok\", \"confidence\": \"LOW\", \"citedPassages\": []}");
         chatModel.use(model);
 
         assertThat(postJson("{\"question\": \"What is a record?\"}")).hasStatusOk();
 
         assertThat(model.lastPrompt().getOptions())
                 .isInstanceOfSatisfying(StructuredOutputChatOptions.class, options -> assertThat(options.getOutputSchema())
-                        .contains("\"answer\"", "\"confidence\"", "\"HIGH\"", "\"MEDIUM\"", "\"LOW\""));
+                        .contains("\"answer\"", "\"confidence\"", "\"citedPassages\"", "\"HIGH\"", "\"MEDIUM\"",
+                                "\"LOW\""));
     }
 
     // AC3: invalid input is a 400 problem without echoing the question, and the model is never called.
@@ -132,9 +184,11 @@ class AnswerApiAcceptanceTest {
     }
 
     @Test
-    void ac3_questionAtTheMaximumLengthReachesTheModel() {
-        assertThat(postJson("{\"question\": \"" + "a".repeat(AskQuestionRequest.MAX_QUESTION_LENGTH) + "\"}"))
-                .hasStatusOk();
+    void ac3_questionAtTheMaximumLengthIsAnswered() {
+        String question = "record " + "a".repeat(AskQuestionRequest.MAX_QUESTION_LENGTH - "record ".length());
+
+        assertThat(postJson("{\"question\": \"" + question + "\"}")).hasStatusOk();
+        assertThat(chatModel.lastPrompt()).isNotNull();
     }
 
     // Documented in the contract as other standard errors: wrong content type and method.
@@ -256,6 +310,10 @@ class AnswerApiAcceptanceTest {
 
         void use(FakeChatModel model) {
             delegate.set(model);
+        }
+
+        Prompt lastPrompt() {
+            return delegate.get().lastPrompt();
         }
 
         @Override

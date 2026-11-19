@@ -20,6 +20,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
+import dev.fagnerlima.ragknowledge.knowledge.KnowledgeUnavailableException;
 import dev.fagnerlima.ragknowledge.shared.web.ApiExceptionHandler;
 
 @WebMvcTest(AnswerController.class)
@@ -98,6 +99,29 @@ class AnswerControllerTest {
                     assertThat(json).extractingPath("$.type")
                             .isEqualTo(ApiExceptionHandler.LLM_UNAVAILABLE_TYPE.toString());
                     assertThat(json).extractingPath("$.title").isEqualTo("Language model unavailable");
+                });
+        assertThat(result).bodyText().doesNotContain("secret upstream detail", DISTINCT_QUESTION);
+        assertThat(output).contains(IllegalStateException.class.getName())
+                .doesNotContain("secret upstream detail", DISTINCT_QUESTION);
+    }
+
+    @Test
+    void mapsKnowledgeBaseFailuresToServiceUnavailableWithoutLeakingDetails(CapturedOutput output) {
+        given(answerService.answer(any()))
+                .willThrow(new KnowledgeUnavailableException("The knowledge base search failed",
+                        new IllegalStateException("secret upstream detail")));
+
+        MvcTestResult result = post("{\"question\": \"" + DISTINCT_QUESTION + "\"}");
+
+        assertThat(result)
+                .hasStatus(HttpStatus.SERVICE_UNAVAILABLE)
+                .hasContentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .bodyJson()
+                .satisfies(json -> {
+                    assertThat(json).extractingPath("$.type")
+                            .isEqualTo(ApiExceptionHandler.KNOWLEDGE_UNAVAILABLE_TYPE.toString());
+                    assertThat(json).extractingPath("$.title").isEqualTo("Knowledge base unavailable");
+                    assertThat(json).extractingPath("$.status").isEqualTo(503);
                 });
         assertThat(result).bodyText().doesNotContain("secret upstream detail", DISTINCT_QUESTION);
         assertThat(output).contains(IllegalStateException.class.getName())

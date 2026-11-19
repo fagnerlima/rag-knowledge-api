@@ -12,12 +12,16 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import dev.fagnerlima.ragknowledge.answer.LlmResponseException;
+import dev.fagnerlima.ragknowledge.knowledge.KnowledgeUnavailableException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
     public static final URI LLM_UNAVAILABLE_TYPE = URI.create(
             "https://github.com/fagnerlima/rag-knowledge-api/blob/main/docs/api-contract.md#llm-unavailable");
+
+    public static final URI KNOWLEDGE_UNAVAILABLE_TYPE = URI.create(
+            "https://github.com/fagnerlima/rag-knowledge-api/blob/main/docs/api-contract.md#knowledge-unavailable");
 
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
@@ -30,6 +34,18 @@ public class ApiExceptionHandler {
                 "The answer could not be generated. Try again later.");
         problem.setType(LLM_UNAVAILABLE_TYPE);
         problem.setTitle("Language model unavailable");
+
+        return problem;
+    }
+
+    @ExceptionHandler(KnowledgeUnavailableException.class)
+    ProblemDetail handleKnowledgeUnavailable(KnowledgeUnavailableException exception) {
+        // Same rule as above: the causes may carry the question (the embedded query) or upstream bodies.
+        log.warn("{} (causes: {})", exception.getMessage(), causeTypes(exception));
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "The knowledge base could not be searched. Try again later.");
+        problem.setType(KNOWLEDGE_UNAVAILABLE_TYPE);
+        problem.setTitle("Knowledge base unavailable");
 
         return problem;
     }

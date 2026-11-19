@@ -4,7 +4,7 @@
 
 Knowledge API with Retrieval-Augmented Generation (RAG), built with Java 21, Spring Boot and Spring AI. Study project: it ingests small public technical documents, retrieves relevant passages and answers questions citing the source.
 
-Status: work in progress. A small corpus of original technical notes can be ingested into PostgreSQL + pgvector and searched from the command line. The question endpoint does not use retrieval yet; that is the next step.
+Status: work in progress. A small corpus of original technical notes is ingested into PostgreSQL + pgvector, and the question endpoint answers from it citing the passages it used.
 
 ## Requirements
 
@@ -24,6 +24,8 @@ Status: work in progress. A small corpus of original technical notes can be inge
 | `DB_URL` | No | `jdbc:postgresql://127.0.0.1:5433/ragknowledge` | JDBC URL of PostgreSQL with the pgvector extension |
 | `DB_USERNAME` | No | `ragknowledge` | Database user |
 | `DB_PASSWORD` | No | `ragknowledge` | Database password. The defaults are synthetic credentials for the local `compose.yaml` database only |
+| `RAG_TOP_K` | No | `4` | Corpus passages sent to the model with each question (1 to 20); more passages cost more input tokens |
+| `RAG_SIMILARITY_THRESHOLD` | No | `0.25` | Minimum cosine similarity (0 to 1) for a passage to be used; with none above it, the question is answered without calling the model |
 
 Embeddings use OpenAI `text-embedding-3-small` (1536 dimensions). The model is fixed in configuration because the database column has that size: changing it needs a new migration and re-ingesting the documents ([ADR 2](docs/adr/0002-pgvector-store-with-flyway-schema.md)).
 
@@ -47,11 +49,17 @@ Then start the app; Flyway creates or updates the schema at startup:
 
 To use another database, set all three `DB_*` variables, put the password only in `DB_PASSWORD` (never in `DB_URL`, which can end up in logs) and require verified TLS, for example `jdbc:postgresql://db.example.org:5432/ragknowledge?sslmode=verify-full`. The `vector` extension must exist or the user must be allowed to create it (a superuser, or `rds_superuser` on Amazon RDS).
 
+## Ask a question
+
+With the corpus ingested (next section) and the app running:
+
 ```bash
-curl -s -X POST localhost:8080/api/v1/answers -H 'Content-Type: application/json' -d '{"question":"What is a Java record?"}'
+curl -s -X POST localhost:8080/api/v1/answers -H 'Content-Type: application/json' -d '{"question":"Why do long-running transactions cause table bloat in PostgreSQL?"}'
 ```
 
-Each request calls the OpenAI API and is billed. The question text is sent to OpenAI, a third party, under OpenAI's API data policies: do not include personal or confidential data. Questions and answers are not stored.
+The question is embedded, the closest corpus passages are retrieved, and the model answers only from them; `sources` lists the passages it cited (document id, title and an excerpt). A question unrelated to the corpus gets a `LOW` confidence answer saying so, with no sources and no chat model call. Every question gets that answer when the corpus was never ingested, so run `--ingest` first. See the [API contract](docs/api-contract.md).
+
+Each question costs one embedding call and, when passages are found, one chat call with about 1,600 tokens of context. The question text and the retrieved passages are sent to OpenAI, a third party, under OpenAI's API data policies: do not include personal or confidential data. Questions and answers are not stored.
 
 `/actuator/health` reports `DOWN` (HTTP 503) when the database is unreachable.
 
@@ -90,4 +98,5 @@ When updating the PostgreSQL image (Dependabot proposes it in `compose.yaml`), c
 - [API contract](docs/api-contract.md)
 - [ADR 1: Spring AI with OpenAI native structured output](docs/adr/0001-spring-ai-openai-native-structured-output.md)
 - [ADR 2: pgvector store with a Flyway-managed schema](docs/adr/0002-pgvector-store-with-flyway-schema.md)
+- [ADR 3: RAG answers with numbered passage citations](docs/adr/0003-rag-answers-with-numbered-passage-citations.md)
 - [Changelog](CHANGELOG.md)

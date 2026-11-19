@@ -1,8 +1,8 @@
 package dev.fagnerlima.ragknowledge.answer;
 
 /**
- * A document passage that supports the answer. Always empty until retrieval (RAG) is implemented,
- * but already part of the contract so clients do not break when sources start being returned.
+ * A corpus passage the model cited as support for the answer: the document id and title from the corpus manifest and
+ * the start of the passage text.
  */
 public record SourceCitation(String documentId, String title, String excerpt) {
 }
