@@ -1,0 +1,24 @@
+# Local PostgreSQL with pgvector for development: `docker compose up -d`.
+# The tag is pinned to a digest so the database cannot change under the app; the test containers use the same
+# image (see PgvectorTestDatabase and ComposeImageTest when updating it).
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+    environment:
+      # Synthetic credentials for a local-only database bound to 127.0.0.1; never reuse them elsewhere.
+      POSTGRES_DB: ragknowledge
+      POSTGRES_USER: ragknowledge
+      POSTGRES_PASSWORD: ragknowledge
+    ports:
+      # 5433 avoids clashing with a PostgreSQL already installed on the default port.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ragknowledge -d ragknowledge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:

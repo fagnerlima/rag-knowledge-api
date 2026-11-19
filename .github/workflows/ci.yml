@@ -30,7 +30,8 @@ jobs:
           java-version: '21'
           cache: maven
 
-      # Tests replace the model with a fake: no OpenAI key or network call is needed.
+      # Tests replace the models with fakes: no OpenAI key is needed. Testcontainers starts PostgreSQL with
+      # pgvector on the runner's Docker.
       - name: Build and run tests
         run: ./mvnw -B -ntp verify
 

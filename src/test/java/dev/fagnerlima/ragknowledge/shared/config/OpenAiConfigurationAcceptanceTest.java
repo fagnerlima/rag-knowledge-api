@@ -8,14 +8,19 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -23,6 +28,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.io.ClassPathResource;
 
 import dev.fagnerlima.ragknowledge.RagKnowledgeApiApplication;
+import dev.fagnerlima.ragknowledge.support.PgvectorTestDatabase;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -30,7 +36,8 @@ import tools.jackson.databind.json.JsonMapper;
  * Acceptance tests of the OpenAI configuration as the operator sees it: the environment variables documented in the
  * README, resolved through application.properties. Variables are passed as command-line arguments, which take
  * precedence over the real environment, so the documented OPENAI_* variables exported in the developer's shell
- * cannot change the outcome. The base URL points to a closed local port so nothing can reach OpenAI.
+ * cannot change the outcome. The base URL points to a closed local port so nothing can reach OpenAI. The datasource
+ * arguments point to the shared test database, overriding DB_URL and the other DB_* variables likewise.
  */
 @ExtendWith(OutputCaptureExtension.class)
 class OpenAiConfigurationAcceptanceTest {
@@ -123,10 +130,30 @@ class OpenAiConfigurationAcceptanceTest {
         }
     }
 
+    // Builds the real embedding model without calling it: the vector store dimensions are configured, so nothing
+    // needs to probe the model at startup.
+    @Test
+    void embeddingModelIsTextEmbedding3SmallAndEmbedsOnlyTheChunkText() {
+        try (ConfigurableApplicationContext context = start("--OPENAI_API_KEY=" + SYNTHETIC_KEY)) {
+            EmbeddingModel model = context.getBean(EmbeddingModel.class);
+            Document chunk = new Document("chunk text", Map.of("title", "metadata-marker title"));
+
+            assertThat(model).isInstanceOfSatisfying(OpenAiEmbeddingModel.class, openAi -> {
+                assertThat(openAi.getOptions().getModel()).isEqualTo("text-embedding-3-small");
+                // With metadata-mode=none Spring AI still applies its "metadata, blank line, content" template, so
+                // the metadata part is empty rather than absent.
+                assertThat(openAi.getEmbeddingContent(chunk)).isEqualToIgnoringWhitespace("chunk text");
+            });
+        }
+    }
+
     private static ConfigurableApplicationContext start(String... args) {
+        String[] allArgs = Stream.concat(Stream.of(PgvectorTestDatabase.datasourceArguments()), Stream.of(args))
+                .toArray(String[]::new);
+
         return new SpringApplicationBuilder(RagKnowledgeApiApplication.class)
                 .properties("server.port=0", "spring.ai.openai.base-url=http://127.0.0.1:9")
-                .run(args);
+                .run(allArgs);
     }
 
     private static Throwable startCatching(String... args) {
