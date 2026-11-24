@@ -43,6 +43,22 @@ class PassageRetrieverTest {
     }
 
     @Test
+    void retrieveWithATopKKeepsTheConfiguredThreshold() {
+        given(vectorStore.similaritySearch(any(SearchRequest.class))).willReturn(List.of());
+
+        retriever.retrieve("anything", 8);
+
+        SearchRequest request = capturedRequest();
+        assertThat(request.getTopK()).isEqualTo(8);
+        assertThat(request.getSimilarityThreshold()).isEqualTo(0.4);
+    }
+
+    @Test
+    void theDefaultTopKIsTheConfiguredOne() {
+        assertThat(retriever.defaultTopK()).isEqualTo(3);
+    }
+
+    @Test
     void retrieveTopIgnoresTheThreshold() {
         given(vectorStore.similaritySearch(any(SearchRequest.class))).willReturn(List.of());
 

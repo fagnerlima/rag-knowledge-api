@@ -22,11 +22,21 @@ public class PassageRetriever {
 
     /** The configured top-K chunks above the similarity threshold, most similar first; empty when none qualifies. */
     public List<RetrievedPassage> retrieve(String query) {
+        return retrieve(query, properties.topK());
+    }
+
+    /** The {@code topK} chunks above the configured similarity threshold, most similar first; empty when none qualifies. */
+    public List<RetrievedPassage> retrieve(String query, int topK) {
         return search(SearchRequest.builder()
                 .query(query)
-                .topK(properties.topK())
+                .topK(topK)
                 .similarityThreshold(properties.similarityThreshold())
                 .build());
+    }
+
+    /** The configured number of chunks a question retrieves when the caller does not choose one. */
+    public int defaultTopK() {
+        return properties.topK();
     }
 
     /** The {@code topK} most similar chunks, without the configured similarity threshold. */
