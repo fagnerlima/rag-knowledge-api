@@ -21,6 +21,8 @@ All notable changes to this project are documented in this file. The format foll
 - A question unrelated to the corpus is answered with `LOW` confidence and no sources, without calling the chat model.
 - `RAG_TOP_K` and `RAG_SIMILARITY_THRESHOLD` tune how many passages are retrieved and how similar they must be.
 - `503 Service Unavailable` (`knowledge-unavailable`) when the knowledge base cannot be searched.
+- MCP server at `http://127.0.0.1:8080/mcp` (Streamable HTTP) with the read-only `search_knowledge` tool: AI assistants and agents can search the corpus and get passages with their source (document id, title, file, chunk index and similarity score).
+- The MCP endpoint rejects requests whose `Host` or `Origin` is not a loopback address, against DNS rebinding.
 
 ### Changed
 

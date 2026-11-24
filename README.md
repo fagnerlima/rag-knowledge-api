@@ -4,7 +4,7 @@
 
 Knowledge API with Retrieval-Augmented Generation (RAG), built with Java 21, Spring Boot and Spring AI. Study project: it ingests small public technical documents, retrieves relevant passages and answers questions citing the source.
 
-Status: work in progress. A small corpus of original technical notes is ingested into PostgreSQL + pgvector, and the question endpoint answers from it citing the passages it used.
+Status: work in progress. A small corpus of original technical notes is ingested into PostgreSQL + pgvector, the question endpoint answers from it citing the passages it used, and AI assistants can search it through an MCP tool.
 
 ## Requirements
 
@@ -63,6 +63,20 @@ Each question costs one embedding call and, when passages are found, one chat ca
 
 `/actuator/health` reports `DOWN` (HTTP 503) when the database is unreachable.
 
+## Search from an AI assistant (MCP)
+
+The running app is also a [Model Context Protocol](https://modelcontextprotocol.io/) server at `http://127.0.0.1:8080/mcp` (Streamable HTTP). Its only tool, `search_knowledge`, searches the ingested corpus and returns the most relevant passages with their source (document id, title, file, chunk index and similarity score), without calling the chat model. See the [tool contract](docs/api-contract.md#mcp-tool-search_knowledge) and [ADR 4](docs/adr/0004-rag-search-as-mcp-tool.md).
+
+Connect Claude Code to it (local scope, only for this machine) and ask about the corpus in a session:
+
+```bash
+claude mcp add --transport http rag-knowledge http://127.0.0.1:8080/mcp
+```
+
+Or try it in the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) with the Streamable HTTP transport and the same URL. Other MCP clients that support Streamable HTTP connect the same way.
+
+A call with `{"query": "Why do long-running transactions cause table bloat in PostgreSQL?", "topK": 2}` returns two passages of `postgresql-mvcc` (chunks 1 and 0, similarity 0.553 and 0.412). Each call costs one embedding call and sends the query to OpenAI, like a question. The endpoint accepts only loopback `Host` and `Origin` values, so a web page cannot reach it through DNS rebinding; it has no authentication, so keep `SERVER_ADDRESS` on loopback.
+
 ## Ingest and search the corpus
 
 The corpus is a handful of original technical notes in [`src/main/resources/corpus`](src/main/resources/corpus), listed in `manifest.json` (`id`, `title`, `file`). They contain no personal or corporate data.
@@ -99,4 +113,5 @@ When updating the PostgreSQL image (Dependabot proposes it in `compose.yaml`), c
 - [ADR 1: Spring AI with OpenAI native structured output](docs/adr/0001-spring-ai-openai-native-structured-output.md)
 - [ADR 2: pgvector store with a Flyway-managed schema](docs/adr/0002-pgvector-store-with-flyway-schema.md)
 - [ADR 3: RAG answers with numbered passage citations](docs/adr/0003-rag-answers-with-numbered-passage-citations.md)
+- [ADR 4: RAG search as an MCP tool over Streamable HTTP](docs/adr/0004-rag-search-as-mcp-tool.md)
 - [Changelog](CHANGELOG.md)
